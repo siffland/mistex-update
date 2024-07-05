@@ -9,8 +9,21 @@ directories=("_Arcade" "_Console" "_Utility" "_Computer" "_Other")
 # Platform configuration file
 platform_config="/media/fat/mistex_platform.ini"
 
+# Determine the actual case of the Scripts directory
+if [ -d "/media/fat/Scripts" ]; then
+    scripts_dir="/media/fat/Scripts"
+elif [ -d "/media/fat/scripts" ]; then
+    scripts_dir="/media/fat/scripts"
+else
+    echo "Error: Neither /media/fat/Scripts nor /media/fat/scripts directory found."
+    exit 1
+fi
+
 # Persistent git directory
-git_dir="/media/fat/Scripts/.config/mistex_updater"
+git_dir="$scripts_dir/.config/mistex_updater"
+
+# Get the directory of the script
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
 # Function to prompt user for platform selection
 select_platform() {
@@ -45,15 +58,31 @@ clone_specific_dirs() {
     echo "Updating specific directories for $platform..."
     
     mkdir -p "$git_dir"
-    cd "$git_dir"
+    cd "$git_dir" || { echo "Error: Unable to change to directory $git_dir"; return 1; }
     
     if [ ! -d ".git" ]; then
-        git init 2>/dev/null
-        git config --local init.defaultBranch main
-        git remote add origin https://github.com/MiSTeX-devel/MiSTeX-bin.git
-        git config core.sparseCheckout true
+        echo "Initializing Git repository..."
+        if ! git init 2>/dev/null; then
+            echo "Error: Failed to initialize Git repository"
+            return 1
+        fi
+        if ! git config --local init.defaultBranch main; then
+            echo "Error: Failed to set default branch"
+            return 1
+        fi
+        if ! git remote add origin https://github.com/MiSTeX-devel/MiSTeX-bin.git; then
+            echo "Error: Failed to add remote origin"
+            return 1
+        fi
+        if ! git config core.sparseCheckout true; then
+            echo "Error: Failed to enable sparse checkout"
+            return 1
+        fi
+    else
+        echo "Using existing Git repository..."
     fi
     
+    echo "Updating sparse-checkout file..."
     # Clear existing sparse-checkout file
     > .git/info/sparse-checkout
     
@@ -65,28 +94,30 @@ clone_specific_dirs() {
         fi
     done
     
+    echo "Fetching latest changes..."
     # Fetch the latest changes
     if ! git fetch --depth=1 origin main; then
         echo "Error: Failed to fetch from repository. Please check your internet connection and try again."
-        cd - > /dev/null 2>&1
         return 1
     fi
     
+    echo "Checking out main branch..."
     # Update the working directory to match the new sparse-checkout configuration
     if ! git checkout main; then
         echo "Error: Failed to checkout main branch. Please try again."
-        cd - > /dev/null 2>&1
         return 1
     fi
     
+    echo "Pulling latest changes..."
     # Pull the latest changes
     if ! git pull --depth=1 origin main; then
         echo "Error: Failed to pull from repository. Please check your internet connection and try again."
-        cd - > /dev/null 2>&1
         return 1
     fi
     
-    cd - > /dev/null 2>&1
+    cd - > /dev/null 2>&1 || { echo "Error: Unable to return to original directory"; return 1; }
+    
+    echo "Repository update completed successfully."
 }
 
 # Function to clean up and update cores
@@ -170,6 +201,10 @@ show_help() {
     echo "or prompt for selection if no platform is stored."
 }
 
+# Debug output
+echo "Current working directory: $(pwd)"
+echo "Script directory: $SCRIPT_DIR"
+
 # Main script
 case "$1" in
     -h|--help)
@@ -207,10 +242,10 @@ case "$1" in
         ;;
 esac
 
-if clone_specific_dirs "$platform"; then
-    cleanup_and_update "$git_dir" "$platform"
-else
+if ! clone_specific_dirs "$platform"; then
     echo "Error: Failed to update repository. Aborting update."
+    exit 1
 fi
+cleanup_and_update "$git_dir" "$platform"
 
 echo "Script execution completed."
