@@ -61,17 +61,9 @@ clone_specific_dirs() {
     cd "$git_dir" || { echo "Error: Unable to change to directory $git_dir"; return 1; }
     
     if [ ! -d ".git" ]; then
-        echo "Initializing Git repository..."
-        if ! git init 2>/dev/null; then
-            echo "Error: Failed to initialize Git repository"
-            return 1
-        fi
-        if ! git config --local init.defaultBranch main; then
-            echo "Error: Failed to set default branch"
-            return 1
-        fi
-        if ! git remote add origin https://github.com/MiSTeX-devel/MiSTeX-bin.git; then
-            echo "Error: Failed to add remote origin"
+        echo "Cloning Git repository..."
+        if ! git clone --no-checkout https://github.com/MiSTeX-devel/MiSTeX-bin.git .; then
+            echo "Error: Failed to clone Git repository"
             return 1
         fi
         if ! git config core.sparseCheckout true; then
@@ -107,15 +99,6 @@ clone_specific_dirs() {
         echo "Error: Failed to checkout main branch. Please try again."
         return 1
     fi
-    
-    echo "Pulling latest changes..."
-    # Pull the latest changes
-    if ! git pull --depth=1 origin main; then
-        echo "Error: Failed to pull from repository. Please check your internet connection and try again."
-        return 1
-    fi
-    
-    cd - > /dev/null 2>&1 || { echo "Error: Unable to return to original directory"; return 1; }
     
     echo "Repository update completed successfully."
 }
@@ -249,3 +232,4 @@ fi
 cleanup_and_update "$git_dir" "$platform"
 
 echo "Script execution completed."
+
